@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
-function badRequestResponse(string $message)
+function badRequestResponse($message)
 {
     return response()->json([
         'status' => 400,
@@ -28,7 +29,9 @@ class UserController extends Controller
             $limit = 20;
         }
 
-        $users = User::paginate($limit);
+        $users = User::with(['membershipStatus' => function ($query) {
+            $query->select('id', 'name');
+        }])->paginate($limit);
         
         return response()->json([
             'status' => 200,
@@ -45,57 +48,19 @@ class UserController extends Controller
         $age = $request->input('age');
         $membershipStatusId = $request->input('membership_status_id');
 
-        // Email validation
-        if ($email == null || $email == "") {
-            return badRequestResponse("Email is required!");
-        }
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|unique:users',
+            'password' => 'required|string',
+            'name' => 'required|string',
+            'age' => 'required|integer|min:18',
+            'membership_status_id' => 'required'
+        ]);
 
-        $pattern = "/^[\w\.-]+@([\w\-]+\.)+[a-zA-Z]{2,4}$/";
-        if (!preg_match($pattern, $email)) {
-            return badRequestResponse("Email is invalid!");
-        }
-
-        $emails = DB::table('users')->pluck('email')->toArray();
-        if (in_array($email, $emails)) {
-            return badRequestResponse("Email already registered!");
-        }
-
-        // Password validation
-        if ($password == null || $password == "") {
-            return badRequestResponse("Password is required");
-        }
-
-        if (gettype($password) != "string") {
-            return badRequestResponse("Password is invalid");
-        }
-        
-        // Name validation
-        if ($name == null || $name == "") {
-            return badRequestResponse("Name is required");
-        }
-
-        if (gettype($name) != "string") {
-            return badRequestResponse("Name is invalid");
-        }
-
-        // Age validation
-        if ($age == null) {
-            return badRequestResponse("Age is required");
-        }
-
-        if (gettype($age) != "integer") {
-            return badRequestResponse("Age is invalid");
-        }
-
-        if ($age < 18) {
-            return badRequestResponse("Minimum age is 18!");
+        if ($validator->fails()) {
+            return badRequestResponse($validator->errors());
         }
 
         // Membership status validation
-        if ($membershipStatusId == null) {
-            return badRequestResponse("Membership status is required!");
-        }
-
         $membershipStatusIds = DB::table('membership_statuses')->pluck('id')->toArray()    ;
         if (!in_array($membershipStatusId, $membershipStatusIds)) {
             return badRequestResponse("Membership status is invalid");
@@ -142,60 +107,32 @@ class UserController extends Controller
         $userId = intval($id);
         $user = User::where('id', $userId)->first();
 
-        // Email validation
-        if ($email == null || $email == "") {
-            return badRequestResponse("Email is required!");
-        }
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required|string',
+            'name' => 'required|string',
+            'age' => 'required|integer|min:18',
+            'membership_status_id' => 'required'
+        ]);
 
-        $pattern = "/^[\w\.-]+@([\w\-]+\.)+[a-zA-Z]{2,4}$/";
-        if (!preg_match($pattern, $email)) {
-            return badRequestResponse("Email is invalid!");
-        }
-
-        $emails = DB::table('users')->pluck('email')->toArray();
-        if ($email != $user->email && in_array($email, $emails)) {
-            return badRequestResponse("Email already registered!");
-        }
-
-        // Password validation
-        if ($password == null || $password == "") {
-            return badRequestResponse("Password is required");
-        }
-
-        if (gettype($password) != "string") {
-            return badRequestResponse("Password is invalid");
-        }
-        
-        // Name validation
-        if ($name == null || $name == "") {
-            return badRequestResponse("Name is required");
-        }
-
-        if (gettype($name) != "string") {
-            return badRequestResponse("Name is invalid");
-        }
-
-        // Age validation
-        if ($age == null) {
-            return badRequestResponse("Age is required");
-        }
-
-        if (gettype($age) != "integer") {
-            return badRequestResponse("Age is invalid");
-        }
-
-        if ($age < 18) {
-            return badRequestResponse("Minimum age is 18!");
+        if ($validator->fails()) {
+            return badRequestResponse($validator->errors());
         }
 
         // Membership status validation
-        if ($membershipStatusId == null) {
-            return badRequestResponse("Membership status is required!");
-        }
-
         $membershipStatusIds = DB::table('membership_statuses')->pluck('id')->toArray()    ;
         if (!in_array($membershipStatusId, $membershipStatusIds)) {
             return badRequestResponse("Membership status is invalid");
+        }
+        
+        if ($email != $user->email) {
+            $validator = Validator::make($request->all(), [
+                'email' => 'unique:users',
+            ]);
+    
+            if ($validator->fails()) {
+                return badRequestResponse("Email already registered!");
+            }
         }
         
         $user->email = $email;
@@ -222,6 +159,41 @@ class UserController extends Controller
             'status' => 200,
             'message' => 'Successfully deleted data!',
             'data' => [],
+        ]);
+    }
+
+    public function login(Request $request)
+    {
+        $email = $request->input('email');
+        $password = $request->input('password');
+
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return badRequestResponse($validator->errors());
+        }
+
+        $user = User::where('email', $email)->first();
+        if ($user == null) {
+            return badRequestResponse("Email not found!");
+        }
+
+        if (!Hash::check($password, $user->password)) {
+            return badRequestResponse("Wrong password!");
+        }
+
+        $token = auth()->tokenById($user->id);
+
+        return response()->json([
+            'status' => 200,
+            'message' => "Successfully logged in!",
+            'data' => [
+                'token' => $token,
+                'token_type' => 'bearer'
+            ],
         ]);
     }
 }
