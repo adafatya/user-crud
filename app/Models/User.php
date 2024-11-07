@@ -21,6 +21,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'age',
+        'membership_status_id',
+        'role',
     ];
 
     /**
@@ -31,6 +34,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'membership_status_id'
     ];
 
     /**
@@ -45,4 +49,11 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function membershipStatus(): BelongsTo
+    {
+        return $this->belongsTo(MembershipStatus::class);
+    }
+
+    public $timestamps = true;
 }
