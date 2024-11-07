@@ -21,7 +21,7 @@ class EnsureUserIsLoggedIn
                 'status' => 401,
                 'message' => 'Unauthorized, please log in first!',
                 'data' => [],
-            ]);
+            ], 401);
         }
 
         $user = auth()->user();
@@ -30,7 +30,7 @@ class EnsureUserIsLoggedIn
                 'status' => 401,
                 'message' => 'Unauthorized, invalid token!',
                 'data' => [],
-            ]);
+            ], 401);
         }
 
         return $next($request);
