@@ -37,5 +37,14 @@ class DatabaseSeeder extends Seeder
             'membership_status_id' => 3,
             'role' => 'admin'
         ]);
+
+        DB::table('users')->insert([
+            'name' => "Test",
+            'email' => "test@email.com",
+            'password' => Hash::make('password'),
+            'age' => 23,
+            'membership_status_id' => 3,
+            'role' => 'user'
+        ]);
     }
 }
