@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -25,13 +26,38 @@ class UserController extends Controller
     public function getUsersData(Request $request)
     {
         $limit = $request->query('limit');
-        if ($limit == null || $limit <= 0) {
-            $limit = 20;
+        $page = $request->query('page');
+
+        if ($limit == null) {
+            return badRequestResponse("Limit is required!");
+        }
+
+        if ($limit < 1) {
+            return badRequestResponse("Limit must be positive!");
+        }
+
+        if ($page == null) {
+            return badRequestResponse("Page is required!");
+        }
+
+        if ($page < 1) {
+            return badRequestResponse("Page must be positive!");
+        }
+
+        $usersCache = Redis::get('users:'.$limit.':'.$page);
+        if ($usersCache != null) {
+            return response()->json([
+                'status' => 200,
+                'message' => "Successfully get data from cache!",
+                'data' => json_decode($usersCache),
+            ]);
         }
 
         $users = User::with(['membershipStatus' => function ($query) {
             $query->select('id', 'name');
         }])->paginate($limit);
+
+        Redis::set('users:'.$limit.':'.$page, json_encode($users));
         
         return response()->json([
             'status' => 200,
